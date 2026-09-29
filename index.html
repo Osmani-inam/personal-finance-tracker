@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Personal Finance Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root {
+    --primary: #1f4e79;
+    --income: #2e7d32;
+    --expense: #c62828;
+    --bg: #f4f6f8;
+    --card-bg: #ffffff;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: var(--bg);
+    color: #222;
+  }
+  header {
+    background: var(--primary);
+    color: white;
+    padding: 20px 30px;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  .container {
+    max-width: 1000px;
+    margin: 24px auto;
+    padding: 0 16px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .card {
+    background: var(--card-bg);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  .full-width { grid-column: 1 / -1; }
+  h2 { margin-top: 0; font-size: 16px; color: var(--primary); }
+  .summary-row {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 10px;
+  }
+  .summary-box {
+    flex: 1;
+    text-align: center;
+    padding: 14px;
+    border-radius: 8px;
+    color: white;
+  }
+  .summary-box.income { background: var(--income); }
+  .summary-box.expense { background: var(--expense); }
+  .summary-box.balance { background: var(--primary); }
+  .summary-box .label { font-size: 12px; opacity: 0.85; }
+  .summary-box .value { font-size: 20px; font-weight: bold; margin-top: 4px; }
+
+  form { display: grid; gap: 10px; }
+  form label { font-size: 13px; color: #555; }
+  form input, form select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 14px;
+  }
+  form button {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+  }
+  form button:hover { opacity: 0.9; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 8px; text-align: left; border-bottom: 1px solid #eee; }
+  th { color: #666; font-weight: 600; }
+  .tag { padding: 2px 8px; border-radius: 12px; font-size: 12px; color: white; }
+  .tag.INCOME { background: var(--income); }
+  .tag.EXPENSE { background: var(--expense); }
+  .del-btn {
+    background: none;
+    border: none;
+    color: var(--expense);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  #errorBox {
+    display: none;
+    background: #fdecea;
+    color: var(--expense);
+    padding: 10px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Personal Finance Tracker</h1>
+</header>
+
+<div class="container">
+
+  <div class="card full-width">
+    <h2>Overview</h2>
+    <div class="summary-row">
+      <div class="summary-box income">
+        <div class="label">Total Income</div>
+        <div class="value" id="totalIncome">₹0</div>
+      </div>
+      <div class="summary-box expense">
+        <div class="label">Total Expense</div>
+        <div class="value" id="totalExpense">₹0</div>
+      </div>
+      <div class="summary-box balance">
+        <div class="label">Balance</div>
+        <div class="value" id="balance">₹0</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Add Transaction</h2>
+    <div id="errorBox"></div>
+    <form id="txnForm">
+      <div>
+        <label>Title</label>
+        <input type="text" id="title" required placeholder="e.g. Groceries" />
+      </div>
+      <div>
+        <label>Amount (₹)</label>
+        <input type="number" id="amount" step="0.01" min="0.01" required />
+      </div>
+      <div>
+        <label>Type</label>
+        <select id="type">
+          <option value="EXPENSE">Expense</option>
+          <option value="INCOME">Income</option>
+        </select>
+      </div>
+      <div>
+        <label>Category</label>
+        <input type="text" id="category" required placeholder="e.g. Food, Rent, Salary" />
+      </div>
+      <div>
+        <label>Date</label>
+        <input type="date" id="date" required />
+      </div>
+      <div>
+        <label>Notes (optional)</label>
+        <input type="text" id="notes" placeholder="Optional note" />
+      </div>
+      <button type="submit">Add Transaction</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>Expenses by Category</h2>
+    <canvas id="categoryChart" height="220"></canvas>
+  </div>
+
+  <div class="card full-width">
+    <h2>All Transactions</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Title</th>
+          <th>Category</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="txnTableBody"></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+const API_BASE = "http://localhost:8080/api/transactions";
+let categoryChart;
+
+function formatCurrency(value) {
+  return "₹" + Number(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function showError(message) {
+  const box = document.getElementById("errorBox");
+  box.textContent = message;
+  box.style.display = "block";
+  setTimeout(() => (box.style.display = "none"), 4000);
+}
+
+async function fetchTransactions() {
+  try {
+    const res = await fetch(API_BASE);
+    if (!res.ok) throw new Error("Failed to load transactions");
+    const data = await res.json();
+    renderTable(data);
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function fetchSummary() {
+  try {
+    const res = await fetch(API_BASE + "/summary");
+    if (!res.ok) throw new Error("Failed to load summary");
+    const data = await res.json();
+    document.getElementById("totalIncome").textContent = formatCurrency(data.totalIncome);
+    document.getElementById("totalExpense").textContent = formatCurrency(data.totalExpense);
+    document.getElementById("balance").textContent = formatCurrency(data.balance);
+    renderChart(data.expenseByCategory);
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+function renderTable(transactions) {
+  const tbody = document.getElementById("txnTableBody");
+  tbody.innerHTML = "";
+  transactions.forEach((t) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${t.date}</td>
+      <td>${t.title}</td>
+      <td>${t.category}</td>
+      <td><span class="tag ${t.type}">${t.type}</span></td>
+      <td>${formatCurrency(t.amount)}</td>
+      <td><button class="del-btn" onclick="deleteTransaction(${t.id})">Delete</button></td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function renderChart(categoryData) {
+  const labels = Object.keys(categoryData);
+  const values = Object.values(categoryData);
+
+  if (categoryChart) categoryChart.destroy();
+
+  const ctx = document.getElementById("categoryChart").getContext("2d");
+  categoryChart = new Chart(ctx, {
+    type: "pie",
+    data: {
+      labels: labels.length ? labels : ["No expenses yet"],
+      datasets: [{
+        data: values.length ? values : [1],
+        backgroundColor: ["#1f4e79", "#c62828", "#f9a825", "#2e7d32", "#6a1b9a", "#00838f", "#ef6c00"],
+      }],
+    },
+    options: { responsive: true },
+  });
+}
+
+async function deleteTransaction(id) {
+  if (!confirm("Delete this transaction?")) return;
+  try {
+    const res = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete transaction");
+    await refreshAll();
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+document.getElementById("txnForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const payload = {
+    title: document.getElementById("title").value.trim(),
+    amount: parseFloat(document.getElementById("amount").value),
+    type: document.getElementById("type").value,
+    category: document.getElementById("category").value.trim(),
+    date: document.getElementById("date").value,
+    notes: document.getElementById("notes").value.trim(),
+  };
+
+  try {
+    const res = await fetch(API_BASE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to add transaction - check the fields");
+    e.target.reset();
+    await refreshAll();
+  } catch (err) {
+    showError(err.message);
+  }
+});
+
+async function refreshAll() {
+  await fetchTransactions();
+  await fetchSummary();
+}
+
+refreshAll();
+</script>
+
+</body>
+</html>
