@@ -1,4 +1,4 @@
-# Personal Finance Tracker
+Personal Finance Tracker
 
 A full-stack personal finance tracker:
 - **Backend:** Java + Spring Boot (REST API) + MySQL
